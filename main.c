@@ -99,7 +99,9 @@ PointList_t *findStreamPixelsInWindow(int fd, RASTER_MAP_TYPE dataType, int wind
 				break;
 			}
 			logTmpValue = log10(tmpValue);
-			// Test for stream pixel
+			// Test for nearby pixels that are stream pixels when compared to the central pixel
+			//fprintf(stderr, "logTmpValue: %f, logCentralValue: %f\n",
+			//		logTmpValue, logCentralValue);
 			if ( (logTmpValue - logCentralValue) > threshold ) {
 				// Add to list of stream pixels
 				if ( NULL == streamPixels ) {
@@ -286,10 +288,6 @@ int main(int argc, char *argv[])
 	/* Determine the inputmap type (CELL/FCELL/DCELL) */
 	data_type = G_raster_map_type(name, mapset);
 
-	//if (DCELL_TYPE != data_type) {
-	//	G_fatal_error(_("Raster map must be of DCELL type"));
-	//}
-
 	/* Open the raster - returns file destriptor (>0) */
 	if ((infd = G_open_cell_old(name, mapset)) < 0)
 		G_fatal_error(_("Unable to open raster map <%s>"), name);
@@ -308,6 +306,11 @@ int main(int argc, char *argv[])
 	PointList_t *streamPixels = findStreamPixelsInWindow(infd, data_type, windowSize, threshold,
 			nrows_less_one, ncols_less_one,
 			rowIdx, colIdx);
+	if ( !quiet ) {
+		fprintf(stderr, "Stream pixels: ");
+		printList(stderr, streamPixels, " ");
+		fprintf(stderr, "\n");
+	}
 	PointList_t *nearestStreamPixel = findNearestPoint(streamPixels, colIdx, rowIdx);
 
 	if ( NULL != nearestStreamPixel ) {
