@@ -28,115 +28,18 @@
 #define THRESHOLD_DISTANCE 100
 #define DEFAULT_COORD_SEP ' '
 
-/* 
- * global function declaration 
- */
-//PointList_t *findStreamPixelsInWindow(int fd, RASTER_MAP_TYPE dataType, int windowSize, int threshold,
-//		int nrows_less_one, int ncols_less_one,
-//		int currRow, int currCol);
-
 /*
- * function definitions 
+ * global function declaration
  */
 PointList_t *findStreamPixelsInWindow(int fd, char *name, char *mapset, RASTER_MAP_TYPE dataType,
 		int windowSize, double threshold,
 		int nrows_less_one, int ncols_less_one,
-		int currRow, int currCol) {
-	assert( DCELL_TYPE == dataType );
-	assert( windowSize & 1 );
+		int currRow, int currCol);
 
-	PointList_t *streamPixels = NULL;
-	DCELL centralValue, tmpValue;
-	double logCentralValue, logTmpValue;
-	void *tmpRow = G_allocate_raster_buf(dataType);
-
-	// Get value of central cell
-	if (G_get_raster_row(fd, tmpRow, currRow, dataType) < 0) {
-		G_fatal_error(_("Unable to read raster row %d"), currRow);
-	}
-
-	switch (dataType) {
-	case CELL_TYPE:
-		centralValue = (double)((CELL *) tmpRow)[currCol];
-		break;
-	case FCELL_TYPE:
-		centralValue = (double)((FCELL *) tmpRow)[currCol];
-		break;
-	case DCELL_TYPE:
-		centralValue = (double)((DCELL *) tmpRow)[currCol];
-		break;
-	}
-
-	// Determine threshold
-	struct FPRange *range = (struct FPRange *)malloc(sizeof(struct FPRange));
-	if ( G_read_fp_range(name, mapset, range) < 0 ) {
-		G_fatal_error(_("Unable to determine range of raster map <%s>"), name);
-	}
-	double max = range->max;
-	free(range); // eggs or is it chicken?
-	if ( max == centralValue ) {
-		return streamPixels;
-	}
-
-	if ( centralValue <= 0 ) centralValue = 1;
-	logCentralValue = log10(centralValue);
-	double logMax = log10(max);
-	threshold = floor(logMax - logCentralValue);
-	fprintf(stderr, "logCentralValue: %f, logMax: %f\n", logCentralValue, logMax);
-	fprintf(stderr, "threshold: %f\n", threshold);
-
-	// Define window bounds
-	int windowOffset = ( windowSize - 1 ) / 2;
-	int minCol = currCol - windowOffset;
-	if ( minCol < 0 ) minCol = 0;
-	int maxCol = currCol + windowOffset;
-	if ( maxCol > ncols_less_one ) maxCol = ncols_less_one;
-	int minRow = currRow - windowOffset;
-	if ( minRow < 0 ) minRow = 0;
-	int maxRow = currRow + windowOffset;
-	if ( maxRow > nrows_less_one ) maxRow = nrows_less_one;
-	fprintf(stderr, "currCol: %d, currRow: %d\n", currCol, currRow);
-	fprintf(stderr, "min. col: %d, max. col: %d\n", minCol, maxCol);
-	fprintf(stderr, "min. row: %d, max. row: %d\n", minRow, maxRow);
-
-	// Search for stream pixels within the window
-	int row, col;
-	for ( row = minRow ; row <= maxRow ; row++ ) {
-		fprintf(stderr, "row: %d\n", row);
-		// Get the current row
-		if (G_get_raster_row(fd, tmpRow, row, dataType) < 0) {
-				G_fatal_error(_("Unable to read raster row %d"), row);
-		}
-		for ( col = minCol ; col <= maxCol ; col++ ) {
-			fprintf(stderr, "\tcol: %d\n", col);
-			switch (dataType) {
-			case CELL_TYPE:
-				tmpValue = (double)((CELL *) tmpRow)[col];
-				break;
-			case FCELL_TYPE:
-				tmpValue = (double)((FCELL *) tmpRow)[col];
-				break;
-			case DCELL_TYPE:
-				tmpValue = (double)((DCELL *) tmpRow)[col];
-				break;
-			}
-			logTmpValue = log10(tmpValue);
-			// Test for nearby pixels that are stream pixels when compared to the central pixel
-			fprintf(stderr, "\t\tlogTmpValue: %f, logCentralValue: %f\n",
-					logTmpValue, logCentralValue);
-			if ( (logTmpValue - logCentralValue) > threshold ) {
-				// Add to list of stream pixels
-				if ( NULL == streamPixels ) {
-					streamPixels = createList(col, row);
-				} else {
-					appendPoint(streamPixels, col, row);
-				}
-			}
-		}
-	}
-	G_free(tmpRow);
-	return streamPixels;
-}
+/*
+ * global variables
+ */
+int quiet;
 
 int main(int argc, char *argv[])
 {
@@ -147,7 +50,6 @@ int main(int argc, char *argv[])
 	int nrows, ncols;
 	int rowIdx, colIdx, nrows_less_one, ncols_less_one, total;
 	int infd;		/* file descriptor */
-	int quiet;
 	RASTER_MAP_TYPE data_type;	/* type of the map (CELL/DCELL/...) */
 	struct GModule *module;	/* GRASS module for parsing arguments */
 
@@ -267,15 +169,12 @@ int main(int argc, char *argv[])
 		threshold = atof(optThreshold->answer);
 	} else {
 		// Automatically determine the threshold
-		threshold = -1;
+		threshold = -1.0;
 	}
-	if ( threshold < 1 ) {
-		G_warning(_("Invalid threshold %s.  Window size must be an integer >= 1\n"), optThreshold->answer);
+	if ( threshold != -1.0 && threshold > 0.0 ) {
+		G_warning(_("Invalid threshold %s.  Threshold must be > 0.0\n"), optThreshold->answer);
 		G_usage();
 		exit(EXIT_FAILURE);
-	}
-	if ( !quiet ) {
-		fprintf(stderr, "Stream log-difference threshold %d\n", threshold);
 	}
 
 	if (!G_scan_easting(*optE->answers, &E, G_projection())) {
@@ -320,51 +219,49 @@ int main(int argc, char *argv[])
 			windowSize, threshold,
 			nrows_less_one, ncols_less_one,
 			rowIdx, colIdx);
-	if ( !quiet ) {
-		fprintf(stderr, "Stream pixels: ");
-		printList(stderr, streamPixels, " ");
-		fprintf(stderr, "\n");
-	}
+#ifdef DEBUG
+	fprintf(stderr, "Stream pixels: ");
+	printList(stderr, streamPixels, " ");
+	fprintf(stderr, "\n");
+#endif
 	PointList_t *nearestStreamPixel = findNearestPoint(streamPixels, colIdx, rowIdx);
 
 	if ( NULL != nearestStreamPixel ) {
 
-		if ( !quiet ) {
-			double nearestValue;
-			void *tmpRow = G_allocate_raster_buf(data_type);
-			int currCol = nearestStreamPixel->col;
-			int currRow = nearestStreamPixel->row;
+#ifdef DEBUG
+		double nearestValue;
+		void *tmpRow = G_allocate_raster_buf(data_type);
+		int currCol = nearestStreamPixel->col;
+		int currRow = nearestStreamPixel->row;
 
-			fprintf(stderr, "Nearest pixel col: %d, row: %d\n", currCol, currRow);
+		fprintf(stderr, "Nearest pixel col: %d, row: %d\n", currCol, currRow);
 
-			// Get value of central cell
-			if (G_get_raster_row(infd, tmpRow, currRow, data_type) < 0) {
-				G_fatal_error(_("Unable to read raster row %d"), currRow);
-			}
-
-			switch (data_type) {
-			case CELL_TYPE:
-				nearestValue = (double)((CELL *) tmpRow)[currCol];
-				break;
-			case FCELL_TYPE:
-				nearestValue = (double)((FCELL *) tmpRow)[currCol];
-				break;
-			case DCELL_TYPE:
-				nearestValue = (double)((DCELL *) tmpRow)[currCol];
-				break;
-			}
-
-			fprintf(stderr, "Nearest stream pixel UAA value: %f\n", nearestValue);
-			G_free(tmpRow);
+		// Get value of central cell
+		if (G_get_raster_row(infd, tmpRow, currRow, data_type) < 0) {
+			G_fatal_error(_("Unable to read raster row %d"), currRow);
 		}
+
+		switch (data_type) {
+		case CELL_TYPE:
+			nearestValue = (double)((CELL *) tmpRow)[currCol];
+			break;
+		case FCELL_TYPE:
+			nearestValue = (double)((FCELL *) tmpRow)[currCol];
+			break;
+		case DCELL_TYPE:
+			nearestValue = (double)((DCELL *) tmpRow)[currCol];
+			break;
+		}
+
+		fprintf(stderr, "Nearest stream pixel UAA value: %f\n", nearestValue);
+		G_free(tmpRow);
+#endif
 
 		// Get center of each column
 		double nearestEasting = G_col_to_easting(nearestStreamPixel->col+0.5, &window);
 		double nearestNorthing = G_row_to_northing(nearestStreamPixel->row+0.5, &window);
-//		fprintf(stderr, "raw snap: %f%s%f\n", nearestEasting, sep, nearestNorthing);
 
-//		nearestEasting = round(G_col_to_easting(nearestStreamPixel->col, &window));
-//		nearestNorthing = round(G_row_to_northing(nearestStreamPixel->row, &window));
+		// Print snapped coordinates
 		printf("%f%s%f\n", nearestEasting, sep, nearestNorthing);
 	}
 
@@ -375,4 +272,120 @@ int main(int argc, char *argv[])
 	G_close_cell(infd);
 
 	exit(EXIT_SUCCESS);
+}
+
+/*
+ * function definitions
+ */
+PointList_t *findStreamPixelsInWindow(int fd, char *name, char *mapset, RASTER_MAP_TYPE dataType,
+		int windowSize, double threshold,
+		int nrows_less_one, int ncols_less_one,
+		int currRow, int currCol) {
+	assert( DCELL_TYPE == dataType );
+	assert( windowSize & 1 );
+
+	PointList_t *streamPixels = NULL;
+	DCELL centralValue, tmpValue;
+	double logCentralValue, logTmpValue;
+	void *tmpRow = G_allocate_raster_buf(dataType);
+
+	// Get value of central cell
+	if (G_get_raster_row(fd, tmpRow, currRow, dataType) < 0) {
+		G_fatal_error(_("Unable to read raster row %d"), currRow);
+	}
+	switch (dataType) {
+	case CELL_TYPE:
+		centralValue = (double)((CELL *) tmpRow)[currCol];
+		break;
+	case FCELL_TYPE:
+		centralValue = (double)((FCELL *) tmpRow)[currCol];
+		break;
+	case DCELL_TYPE:
+		centralValue = (double)((DCELL *) tmpRow)[currCol];
+		break;
+	}
+	if ( centralValue <= 0 ) centralValue = 1;
+	logCentralValue = log10(centralValue);
+#ifdef DEBUG
+	fprintf(stderr, "logCentralValue: %f, logMax: %f\n", logCentralValue, logMax);
+#endif
+
+	// Determine threshold if need be
+	if ( -1.0 == threshold ) {
+		struct FPRange *range = (struct FPRange *)malloc(sizeof(struct FPRange));
+		if ( G_read_fp_range(name, mapset, range) < 0 ) {
+			G_fatal_error(_("Unable to determine range of raster map <%s>"), name);
+		}
+		double max = range->max;
+		free(range); // eggs or is it chicken?
+		if ( max == centralValue ) return streamPixels;
+
+		double logMax = log10(max);
+		threshold = floor(logMax - logCentralValue);
+		if (threshold <= 0.0) threshold = 1.0;
+	}
+
+	if ( !quiet ) {
+		fprintf(stderr, "threshold: %f\n", threshold);
+	}
+
+	// Define window bounds
+	int windowOffset = ( windowSize - 1 ) / 2;
+	int minCol = currCol - windowOffset;
+	if ( minCol < 0 ) minCol = 0;
+	int maxCol = currCol + windowOffset;
+	if ( maxCol > ncols_less_one ) maxCol = ncols_less_one;
+	int minRow = currRow - windowOffset;
+	if ( minRow < 0 ) minRow = 0;
+	int maxRow = currRow + windowOffset;
+	if ( maxRow > nrows_less_one ) maxRow = nrows_less_one;
+#ifdef DEBUG
+	fprintf(stderr, "currCol: %d, currRow: %d\n", currCol, currRow);
+	fprintf(stderr, "min. col: %d, max. col: %d\n", minCol, maxCol);
+	fprintf(stderr, "min. row: %d, max. row: %d\n", minRow, maxRow);
+#endif
+
+	// Search for stream pixels within the window
+	int row, col;
+	for ( row = minRow ; row <= maxRow ; row++ ) {
+#ifdef DEBUG
+		fprintf(stderr, "row: %d\n", row);
+#endif
+		// Get the current row
+		if (G_get_raster_row(fd, tmpRow, row, dataType) < 0) {
+				G_fatal_error(_("Unable to read raster row %d"), row);
+		}
+		for ( col = minCol ; col <= maxCol ; col++ ) {
+#ifdef DEBUG
+			fprintf(stderr, "\tcol: %d\n", col);
+#endif
+			switch (dataType) {
+			case CELL_TYPE:
+				tmpValue = (double)((CELL *) tmpRow)[col];
+				break;
+			case FCELL_TYPE:
+				tmpValue = (double)((FCELL *) tmpRow)[col];
+				break;
+			case DCELL_TYPE:
+				tmpValue = (double)((DCELL *) tmpRow)[col];
+				break;
+			}
+			logTmpValue = log10(tmpValue);
+			// Test for nearby pixels that are stream pixels when compared to the central pixel
+#ifdef DEBUG
+			fprintf(stderr, "\t\tlogTmpValue: %f, logCentralValue: %f\n",
+					logTmpValue, logCentralValue);
+#endif
+			if ( (logTmpValue - logCentralValue) > threshold ) {
+				// Add to list of stream pixels
+				if ( NULL == streamPixels ) {
+					streamPixels = createList(col, row);
+				} else {
+					appendPoint(streamPixels, col, row);
+				}
+			}
+		}
+	}
+	G_free(tmpRow);
+	return streamPixels;
 }
