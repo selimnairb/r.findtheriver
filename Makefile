@@ -5,7 +5,7 @@ GRASS_VERSION_STR = 6.4
 
 PGM = r.findtheriver
 
-COMPILE_FLAGS = -g
+COMPILE_FLAGS = -g -Wall -Werror-implicit-function-declaration -fno-common
 LIBES = $(GISLIB)
 DEPENDENCIES = $(GISDEP)
 

@@ -1,25 +1,27 @@
+/**
+\file main.c
 
-/****************************************************************************
- *
- * MODULE:       r.findtheriver
- * AUTHOR(S):    Brian Miles - brian_miles@unc.edu
- *               with hints from: Glynn Clements - glynn gclements.plus.com
- * PURPOSE:      Finds the nearest stream pixel to a coordinate pair using
- * 				 an upstream accumulating area map.
- *
- * COPYRIGHT:    (C) 2013 by the University of North Carolina at Chapel Hill
- *
- *               This program is free software under the GNU General Public
- *   	    	 License (>=v2). Read the file COPYING that comes with GRASS
- *   	    	 for details.
- *
- *****************************************************************************/
+\brief r.findtheriver - Finds the nearest stream pixel to a
+coordinate pair using an upstream accumulating area map.
 
+(C) 2013 by the University of North Carolina at Chapel Hill
+
+This program is free software under the
+GNU General Public License (>=v2).
+Read the file COPYING that comes with GRASS
+for details.
+
+\author Brian Miles - brian_miles@unc.edu
+
+\date May, 20 2013
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <math.h>
+
+#include <grass/config.h>
 #include <grass/gis.h>
 #include <grass/glocale.h>
 
@@ -31,7 +33,23 @@
 /*
  * global function declaration
  */
-PointList_t *findStreamPixelsInWindow(int fd, char *name, char *mapset, RASTER_MAP_TYPE dataType,
+ /**
+\brief Find stream pixels in a given window of the UAA raster
+
+\param[in] fd UAA raster file descriptor
+\param[in] name Name of UAA raster map
+\param[in] mapset Name of the GRASS mapset from which UAA raster should be read
+\param[in] dataType Data type of UAA raster
+\param[in] windowSize Size of the search window, must be an odd integer >= 3
+\param[in] threshold to use for distinguishing stream pixels by comparing log(UAA) values
+\param[in] nrows_less_one Number of rows in the current window, minus 1
+\param[in] ncols_less_one Number of columns in the current window, minus 1
+\param[in] currRow, Row of pixel that will be compared to pixels in the window
+\param[in] currCol, Column of pixel that will be compared to pixels in the window
+
+\return Pointer to PointList_t representing a list of stream pixels found in the window
+*/
+PointList_t *find_stream_pixels_in_window(int fd, char *name, char *mapset, RASTER_MAP_TYPE dataType,
 		int windowSize, double threshold,
 		int nrows_less_one, int ncols_less_one,
 		int currRow, int currCol);
@@ -152,7 +170,7 @@ int main(int argc, char *argv[])
 	if ( NULL != optWindow->answer ) {
 		windowSize = atoi(optWindow->answer);
 	} else {
-		// Determine window size
+		/* Determine window size */
 		double cellRes = (cellhd.ew_res + cellhd.ns_res) / 2;
 		windowSize = THRESHOLD_DISTANCE / cellRes;
 		if ( !(windowSize & 1)  ) windowSize++;
@@ -163,12 +181,12 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 	if ( !quiet ) {
-		fprintf(stderr, "Stream search window size %d\n", windowSize);
+		G_message(_("Stream search window size %d\n"), windowSize);
 	}
 	if ( NULL != optThreshold->answer ) {
 		threshold = atof(optThreshold->answer);
 	} else {
-		// Automatically determine the threshold
+		/* Automatically determine the threshold */
 		threshold = -1.0;
 	}
 	if ( threshold != -1.0 && threshold > 0.0 ) {
@@ -188,7 +206,7 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 	if ( !quiet ) {
-		fprintf(stderr, "Input coordinates, easting %f, northing %f\n", E, N);
+		G_message(_("Input coordinates, easting %f, northing %f\n"), E, N);
 	}
 
 	if ( NULL == optSep->answer) {
@@ -215,7 +233,7 @@ int main(int argc, char *argv[])
 	colIdx = (int)G_easting_to_col(E, &window);
 
 	double currNearestE, prevNearestE, currNearestN, prevNearestN;
-	PointList_t *streamPixels = findStreamPixelsInWindow(infd, &name, mapset, data_type,
+	PointList_t *streamPixels = find_stream_pixels_in_window(infd, &name, mapset, data_type,
 			windowSize, threshold,
 			nrows_less_one, ncols_less_one,
 			rowIdx, colIdx);
@@ -223,8 +241,9 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "Stream pixels: ");
 	printList(stderr, streamPixels, " ");
 	fprintf(stderr, "\n");
+	fflush(stderr);
 #endif
-	PointList_t *nearestStreamPixel = findNearestPoint(streamPixels, colIdx, rowIdx);
+	PointList_t *nearestStreamPixel = find_nearest_point(streamPixels, colIdx, rowIdx);
 
 	if ( NULL != nearestStreamPixel ) {
 
@@ -235,8 +254,9 @@ int main(int argc, char *argv[])
 		int currRow = nearestStreamPixel->row;
 
 		fprintf(stderr, "Nearest pixel col: %d, row: %d\n", currCol, currRow);
+		fflush(stderr);
 
-		// Get value of central cell
+		/* Get value of central cell */
 		if (G_get_raster_row(infd, tmpRow, currRow, data_type) < 0) {
 			G_fatal_error(_("Unable to read raster row %d"), currRow);
 		}
@@ -254,19 +274,20 @@ int main(int argc, char *argv[])
 		}
 
 		fprintf(stderr, "Nearest stream pixel UAA value: %f\n", nearestValue);
+		fflush(stderr);
 		G_free(tmpRow);
 #endif
 
-		// Get center of each column
+		/* Get center of each column */
 		double nearestEasting = G_col_to_easting(nearestStreamPixel->col+0.5, &window);
 		double nearestNorthing = G_row_to_northing(nearestStreamPixel->row+0.5, &window);
 
-		// Print snapped coordinates
-		printf("%f%s%f\n", nearestEasting, sep, nearestNorthing);
+		/* Print snapped coordinates */
+		G_message(_("%f%s%f\n"), nearestEasting, sep, nearestNorthing);
 	}
 
-	// Clean up
-	destroyList(streamPixels);
+	/* Clean up */
+	destroy_list(streamPixels);
 
 	/* closing raster maps */
 	G_close_cell(infd);
@@ -277,7 +298,7 @@ int main(int argc, char *argv[])
 /*
  * function definitions
  */
-PointList_t *findStreamPixelsInWindow(int fd, char *name, char *mapset, RASTER_MAP_TYPE dataType,
+PointList_t *find_stream_pixels_in_window(int fd, char *name, char *mapset, RASTER_MAP_TYPE dataType,
 		int windowSize, double threshold,
 		int nrows_less_one, int ncols_less_one,
 		int currRow, int currCol) {
@@ -289,7 +310,7 @@ PointList_t *findStreamPixelsInWindow(int fd, char *name, char *mapset, RASTER_M
 	double logCentralValue, logTmpValue;
 	void *tmpRow = G_allocate_raster_buf(dataType);
 
-	// Get value of central cell
+	/* Get value of central cell */
 	if (G_get_raster_row(fd, tmpRow, currRow, dataType) < 0) {
 		G_fatal_error(_("Unable to read raster row %d"), currRow);
 	}
@@ -308,11 +329,12 @@ PointList_t *findStreamPixelsInWindow(int fd, char *name, char *mapset, RASTER_M
 	logCentralValue = log10(centralValue);
 #ifdef DEBUG
 	fprintf(stderr, "logCentralValue: %f, logMax: %f\n", logCentralValue, logMax);
+	fflush(stderr);
 #endif
 
-	// Determine threshold if need be
+	/* Determine threshold if need be */
 	if ( -1.0 == threshold ) {
-		struct FPRange *range = (struct FPRange *)malloc(sizeof(struct FPRange));
+		struct FPRange *range = (struct FPRange *)G_malloc(sizeof(struct FPRange));
 		if ( G_read_fp_range(name, mapset, range) < 0 ) {
 			G_fatal_error(_("Unable to determine range of raster map <%s>"), name);
 		}
@@ -326,10 +348,10 @@ PointList_t *findStreamPixelsInWindow(int fd, char *name, char *mapset, RASTER_M
 	}
 
 	if ( !quiet ) {
-		fprintf(stderr, "threshold: %f\n", threshold);
+		G_message(_("threshold: %f\n"), threshold);
 	}
 
-	// Define window bounds
+	/* Define window bounds */
 	int windowOffset = ( windowSize - 1 ) / 2;
 	int minCol = currCol - windowOffset;
 	if ( minCol < 0 ) minCol = 0;
@@ -343,21 +365,24 @@ PointList_t *findStreamPixelsInWindow(int fd, char *name, char *mapset, RASTER_M
 	fprintf(stderr, "currCol: %d, currRow: %d\n", currCol, currRow);
 	fprintf(stderr, "min. col: %d, max. col: %d\n", minCol, maxCol);
 	fprintf(stderr, "min. row: %d, max. row: %d\n", minRow, maxRow);
+	fflush(stderr);
 #endif
 
-	// Search for stream pixels within the window
+	/* Search for stream pixels within the window */
 	int row, col;
 	for ( row = minRow ; row <= maxRow ; row++ ) {
 #ifdef DEBUG
 		fprintf(stderr, "row: %d\n", row);
+		fflush(stderr);
 #endif
-		// Get the current row
+		/* Get the current row */
 		if (G_get_raster_row(fd, tmpRow, row, dataType) < 0) {
 				G_fatal_error(_("Unable to read raster row %d"), row);
 		}
 		for ( col = minCol ; col <= maxCol ; col++ ) {
 #ifdef DEBUG
 			fprintf(stderr, "\tcol: %d\n", col);
+			fflush(stderr);
 #endif
 			switch (dataType) {
 			case CELL_TYPE:
@@ -371,17 +396,18 @@ PointList_t *findStreamPixelsInWindow(int fd, char *name, char *mapset, RASTER_M
 				break;
 			}
 			logTmpValue = log10(tmpValue);
-			// Test for nearby pixels that are stream pixels when compared to the central pixel
+			/* Test for nearby pixels that are stream pixels when compared to the central pixel */
 #ifdef DEBUG
 			fprintf(stderr, "\t\tlogTmpValue: %f, logCentralValue: %f\n",
 					logTmpValue, logCentralValue);
+			fflush(stderr);
 #endif
 			if ( (logTmpValue - logCentralValue) > threshold ) {
-				// Add to list of stream pixels
+				/* Add to list of stream pixels */
 				if ( NULL == streamPixels ) {
-					streamPixels = createList(col, row);
+					streamPixels = create_list(col, row);
 				} else {
-					appendPoint(streamPixels, col, row);
+					append_point(streamPixels, col, row);
 				}
 			}
 		}
