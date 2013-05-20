@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
 	char name[GNAME_MAX];			/* input raster name */
 	char *mapset;		/* mapset name */
 	int nrows, ncols;
-	int rowIdx, colIdx, nrows_less_one, ncols_less_one, total;
+	int rowIdx, colIdx, nrows_less_one, ncols_less_one;
 	int infd;		/* file descriptor */
 	RASTER_MAP_TYPE data_type;	/* type of the map (CELL/DCELL/...) */
 	struct GModule *module;	/* GRASS module for parsing arguments */
@@ -78,8 +78,8 @@ int main(int argc, char *argv[])
 	char *buff;
 	int windowSize;
 	double threshold;
-	size_t SEP_SIZE = 1;
-	char sep[SEP_SIZE];
+	size_t SEP_SIZE = 2;
+	char *sep = (char *)G_malloc(SEP_SIZE * sizeof(char));
 
 	/* initialize GIS environment */
 	G_gisinit(argv[0]);		/* reads grass env, stores program name to G_program_name() */
@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
 	optWindow->key_desc = "x";
 	optWindow->multiple = NO;
 	optWindow->required = NO;
-	optWindow->description = _("The size of the window, in pixels, to search in for stream pixels.  Must be an odd integer.  If not supplied, window will be inferred based on raster resolution.");
+	optWindow->description = _("The size of the window, in pixels, to search in for stream\n\t pixels.  Must be an odd integer.  If not supplied, window will be\n\t inferred based on raster resolution.");
 
 	optThreshold = G_define_option();
 	optThreshold->key = "threshold";
@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
 	optThreshold->key_desc = "x";
 	optThreshold->multiple = NO;
 	optThreshold->required = NO;
-	optThreshold->description = _("The threshold for distinguishing log(UAA) values of stream and non-stream pixels.  If not supplied, threshold will be inferred from minimum and maximum raster values.");
+	optThreshold->description = _("The threshold for distinguishing log(UAA) values of stream and\n\t non-stream pixels.  If not supplied, threshold will be inferred from \n\t minimum and maximum raster values.");
 
 	optE = G_define_option();
 	optE->key = "easting";
@@ -135,7 +135,7 @@ int main(int argc, char *argv[])
 	optSep->key_desc = "y";
 	optSep->multiple = NO;
 	optSep->required = NO;
-	optSep->description = _("Coordinate separator. Defaults to ' '. Must be 1 character in length.");
+	optSep->description = _("Coordinate separator. Defaults to ' '. Must be 1 character\n\t in length.");
 
 	/* Define the different flags */
 	flag1 = G_define_flag();
@@ -189,7 +189,7 @@ int main(int argc, char *argv[])
 		/* Automatically determine the threshold */
 		threshold = -1.0;
 	}
-	if ( threshold != -1.0 && threshold > 0.0 ) {
+	if ( threshold != -1.0 && threshold <= 0.0 ) {
 		G_warning(_("Invalid threshold %s.  Threshold must be > 0.0\n"), optThreshold->answer);
 		G_usage();
 		exit(EXIT_FAILURE);
@@ -210,9 +210,14 @@ int main(int argc, char *argv[])
 	}
 
 	if ( NULL == optSep->answer) {
-		sep[0] = DEFAULT_COORD_SEP;
+	  sep[0] = DEFAULT_COORD_SEP;
 	} else {
-		strncpy(&sep, optSep->answer, SEP_SIZE);
+	  if ( strlen(optSep->answer) != 1 ) {
+	    G_warning(_("Separator must be 1 character in length\n"));
+	    G_usage();
+	    exit(EXIT_FAILURE);
+	  }
+	  strncpy(sep, optSep->answer, SEP_SIZE);
 	}
 
 	/* Determine the inputmap type (CELL/FCELL/DCELL) */
@@ -225,21 +230,20 @@ int main(int argc, char *argv[])
 	G_get_set_window(&window);
 	nrows = G_window_rows();
 	ncols = G_window_cols();
-	total = nrows * ncols;
 	nrows_less_one = nrows - 1;
 	ncols_less_one = ncols - 1;
 
 	rowIdx = (int)G_northing_to_row(N, &window);
 	colIdx = (int)G_easting_to_col(E, &window);
 
-	double currNearestE, prevNearestE, currNearestN, prevNearestN;
-	PointList_t *streamPixels = find_stream_pixels_in_window(infd, &name, mapset, data_type,
+	//double currNearestE, prevNearestE, currNearestN, prevNearestN;
+	PointList_t *streamPixels = find_stream_pixels_in_window(infd, (char *)&name, mapset, data_type,
 			windowSize, threshold,
 			nrows_less_one, ncols_less_one,
 			rowIdx, colIdx);
 #ifdef DEBUG
 	fprintf(stderr, "Stream pixels: ");
-	printList(stderr, streamPixels, " ");
+	print_list(stderr, streamPixels, " ");
 	fprintf(stderr, "\n");
 	fflush(stderr);
 #endif
@@ -262,14 +266,14 @@ int main(int argc, char *argv[])
 		}
 
 		switch (data_type) {
-		case CELL_TYPE:
-			nearestValue = (double)((CELL *) tmpRow)[currCol];
-			break;
 		case FCELL_TYPE:
 			nearestValue = (double)((FCELL *) tmpRow)[currCol];
 			break;
 		case DCELL_TYPE:
 			nearestValue = (double)((DCELL *) tmpRow)[currCol];
+			break;
+		default:
+		        nearestValue = (double)((CELL *) tmpRow)[currCol];
 			break;
 		}
 
@@ -284,6 +288,7 @@ int main(int argc, char *argv[])
 
 		/* Print snapped coordinates */
 		G_message(_("%f%s%f\n"), nearestEasting, sep, nearestNorthing);
+		
 	}
 
 	/* Clean up */
@@ -328,7 +333,7 @@ PointList_t *find_stream_pixels_in_window(int fd, char *name, char *mapset, RAST
 	if ( centralValue <= 0 ) centralValue = 1;
 	logCentralValue = log10(centralValue);
 #ifdef DEBUG
-	fprintf(stderr, "logCentralValue: %f, logMax: %f\n", logCentralValue, logMax);
+	fprintf(stderr, "logCentralValue: %f\n", logCentralValue);
 	fflush(stderr);
 #endif
 
@@ -339,12 +344,22 @@ PointList_t *find_stream_pixels_in_window(int fd, char *name, char *mapset, RAST
 			G_fatal_error(_("Unable to determine range of raster map <%s>"), name);
 		}
 		double max = range->max;
-		free(range); // eggs or is it chicken?
+		G_free(range); // eggs or is it chicken?
 		if ( max == centralValue ) return streamPixels;
 
 		double logMax = log10(max);
 		threshold = floor(logMax - logCentralValue);
-		if (threshold <= 0.0) threshold = 1.0;
+		if (threshold <= 0.0) {
+		  threshold = 1.0;
+		} else if (threshold > 2.0) {
+		  threshold = 2.0;
+		}
+
+#ifdef DEBUG
+		fprintf(stderr, "logMax: %f\n", logMax);
+		fflush(stderr);
+#endif
+
 	}
 
 	if ( !quiet ) {

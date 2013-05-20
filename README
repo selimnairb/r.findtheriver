@@ -52,10 +52,17 @@ BUILDING
 OS X
 
 First read William Kyngesburye's "Building Addon Modules for Mac OS X
-GRASS.app (see ReadMe-OSX.rtf).  To make, you will generally do:
+GRASS.app (see ReadMe-OSX.rtf).  To install, you will generally do:
 
 sudo make GRASS_HOME=/path/to/grass/modbuild/module/r.soils.texture GRASS_APP=/Applications/GRASS-6.4.app deploy
 
+
 Linux/Unix
 
-sudo make GRASS_HOME=/path/to/grass/modbuild/module/r.soils.texture deploy
+First read: http://grasswiki.osgeo.org/wiki/Compile_and_Install#Addons
+
+To install, you will generally do:
+
+sudo make MODULE_TOPDIR=/usr/lib/grass64/ INST_DIR=/usr/lib/grass64/
+
+Note: you will have to change /usr/lib/grass64 to the location of your GRASS headers.
