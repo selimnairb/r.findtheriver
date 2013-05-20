@@ -54,7 +54,12 @@ OS X
 First read William Kyngesburye's "Building Addon Modules for Mac OS X
 GRASS.app (see ReadMe-OSX.rtf).  To install, you will generally do:
 
-sudo make GRASS_HOME=/path/to/grass/modbuild/module/r.soils.texture GRASS_APP=/Applications/GRASS-6.4.app deploy
+make GRASS_HOME=./ GRASS_APP=/Applications/GRASS-6.4.app
+sudo make GRASS_HOME=./ GRASS_APP=/Applications/GRASS-6.4.app deploy
+
+Assuming you have unpacked r.findtheriver into your local copy of 
+modbuild/module (see ReadMe-OSX.rtf) and the current directory is 
+r.findtheriver.
 
 
 Linux/Unix

@@ -46,3 +46,28 @@ threshold = floor( log(maxUAA) - log(gageUAA) ).
 The closest stream pixel is printed to standard output.  If no stream
 pixels were found nothing is printed.
 
+
+BUILDING
+--------
+OS X
+
+First read William Kyngesburye's "Building Addon Modules for Mac OS X
+GRASS.app (see ReadMe-OSX.rtf).  To install, you will generally do:
+
+make GRASS_HOME=./ GRASS_APP=/Applications/GRASS-6.4.app
+sudo make GRASS_HOME=./ GRASS_APP=/Applications/GRASS-6.4.app deploy
+
+Assuming you have unpacked r.findtheriver into your local copy of 
+modbuild/module (see ReadMe-OSX.rtf) and the current directory is 
+r.findtheriver.
+
+
+Linux/Unix
+
+First read: http://grasswiki.osgeo.org/wiki/Compile_and_Install#Addons
+
+To install, you will generally do:
+
+sudo make MODULE_TOPDIR=/usr/lib/grass64/ INST_DIR=/usr/lib/grass64/
+
+Note: you will have to change /usr/lib/grass64 to the location of your GRASS headers.
