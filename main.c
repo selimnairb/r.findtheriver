@@ -287,7 +287,8 @@ int main(int argc, char *argv[])
 		double nearestNorthing = G_row_to_northing(nearestStreamPixel->row+0.5, &window);
 
 		/* Print snapped coordinates */
-		G_message(_("%f%s%f\n"), nearestEasting, sep, nearestNorthing);
+		fprintf(stdout, _("%f%s%f\n"), nearestEasting, sep, nearestNorthing);
+		fflush(stdout);
 		
 	}
 
