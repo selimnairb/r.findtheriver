@@ -47,6 +47,8 @@ for details.
 \param[in] currRow, Row of pixel that will be compared to pixels in the window
 \param[in] currCol, Column of pixel that will be compared to pixels in the window
 
+\todo Convert pixel size to meters before calculating window
+
 \return Pointer to PointList_t representing a list of stream pixels found in the window
 */
 PointList_t *find_stream_pixels_in_window(int fd, char *name, char *mapset, RASTER_MAP_TYPE dataType,
